@@ -16,7 +16,7 @@
 ;; Interact with CouchDB databases from within Emacs, with ease!
 
 ;; Needs the json.el package, which comes with Emacs 23, but is also
-;; available from http://edward.oconnor.cx/elisp/json.el
+;; available from ELPA or from http://edward.oconnor.cx/elisp/json.el
 
 ;; Right now it just does listing, reading, and updating of documents.
 
@@ -88,9 +88,12 @@
 
 (defvar relax-mode-map (let ((map (make-sparse-keymap)))
                          (define-key map (kbd "RET") 'relax-doc)
+                         (define-key map (kbd "C-o") 'relax-new-doc)
+                         (define-key map (kbd "C-r") 'relax-update-db)
+
                          (define-key map (kbd "SPC") 'scroll-down)
                          (define-key map (kbd "<backspace>") 'scroll-up)
-                         (define-key map (kbd "C-o") 'relax-new-doc)
+                         (define-key map "q" 'quit-window)
                          ;; TODO:
                          (define-key map (kbd "C-k") 'relax-kill-doc)
                          (define-key map "[" 'relax-prev-page)
@@ -106,6 +109,7 @@
           relax-port (url-port url)
           relax-db-path (url-filename url)))
 
+  ;; TODO: update existing DB buffer if present
   (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
 
 (defun relax-mode (status database-url)
@@ -139,6 +143,7 @@
 
 (defun relax-new-doc ()
   (interactive)
+  ;; TODO: allow user to choose ID
   (let ((url-request-method "POST")
         (url-request-data "{}"))
     (url-retrieve (relax-url) 'relax-visit-new-doc)))
@@ -148,6 +153,12 @@
   (search-forward "Location: ")
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
     (url-retrieve doc-url 'relax-doc-mode (list doc-url))))
+
+(defun relax-update-db ()
+  (interactive)
+  (setq buffer-read-only nil)
+  (delete-region (point-min) (point-max))
+  (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
 
 ;; TODO:
 
@@ -160,10 +171,9 @@
 
 (defvar relax-doc-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'relax-submit)
-    ;; TODO
+    (define-key map (kbd "C-x C-s") 'relax-submit)
+    (define-key map (kbd "C-c C-r") 'relax-update-doc)
     (define-key map (kbd "C-c C-k") 'relax-kill-doc)
-    (define-key map (kbd "C-c C-a") 'relax-upload-attachment)
     map))
 
 (defun relax-doc-mode (status document-url)
@@ -196,6 +206,11 @@
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
     (url-retrieve doc-url 'message)))
+
+(defun relax-update-doc ()
+  (interactive)
+  (delete-region (point-min) (point-max))
+  (url-retrieve doc-url 'relax-doc-mode (list doc-url)))
 
 (defun relax-kill-doc ()
   (interactive)
