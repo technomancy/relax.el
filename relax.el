@@ -61,9 +61,10 @@
 ;;; Utilities
 
 (defun relax-url (&optional id)
-  (format "http://%s:%s/%s/%s"
-          relax-host (number-to-string relax-port)
-          relax-db-path (or id "")))
+  (replace-regexp-in-string "\\([^:]\\)//*" "\\1/"
+                            (format "http://%s:%s/%s/%s"
+                                    relax-host (number-to-string relax-port)
+                                    relax-db-path (or id ""))))
 
 (defun relax-trim-headers ()
   (goto-char (point-min))
@@ -85,6 +86,9 @@
     (relax-json-decode
      (buffer-substring (point-min) (point-max)))))
 
+(defun relax-kill-http-buffer ()
+  (kill-buffer http-buffer))
+
 ;;; DB-level
 
 (defvar relax-mode-hook nil)
@@ -92,7 +96,7 @@
 (defvar relax-mode-map (let ((map (make-sparse-keymap)))
                          (define-key map (kbd "RET") 'relax-doc)
                          (define-key map (kbd "C-o") 'relax-new-doc)
-                         (define-key map (kbd "C-r") 'relax-update-db)
+                         (define-key map (kbd "g") 'relax-update-db)
 
                          (define-key map (kbd "SPC") 'scroll-down)
                          (define-key map (kbd "<backspace>") 'scroll-up)
@@ -123,6 +127,8 @@
     (buffer-disable-undo)
     (kill-all-local-variables)
 
+    (set (make-local-variable 'http-buffer) json-buffer)
+    (set (make-local-variable 'kill-buffer-hook) '(relax-kill-http-buffer))
     (set (make-local-variable 'db-url) database-url)
     (set (make-local-variable 'doc-list)
          (relax-load-json-buffer json-buffer)))
@@ -142,7 +148,7 @@
 
 (defun relax-insert-doc-list (docs)
   (dolist (doc docs)
-    (insert "  [" (getf doc :id) " @rev " (getf doc :rev) "]\n")))
+    (insert (format "  [%s @rev %s]\n" (getf doc :id) (getf (getf doc :value) :rev)))))
 
 (defun relax-new-doc ()
   (interactive)
