@@ -7,12 +7,28 @@
 ;; Version: 0.1
 ;; Keywords: database http
 ;; Created: 2009-05-11
+;; Package-Requires: ((json "1.2"))
 
 ;; This file is not part of GNU Emacs.
 
 ;;; Commentary:
 
 ;; Interact with CouchDB databases from within Emacs, with ease!
+
+;; Needs the json.el package, which comes with Emacs 23, but is also
+;; available from http://edward.oconnor.cx/elisp/json.el
+
+;; Right now it just does listing, reading, and updating of documents.
+
+;;; TODO:
+
+;; All kinds of things:
+;; * pretty-printing
+;; * new document
+;; * delete document
+;; * attachment handling
+;; * pagination
+;; * hide _rev and _id fields?
 
 ;;; License:
 
@@ -73,9 +89,11 @@
 
 (defvar relax-mode-map (let ((map (make-sparse-keymap)))
                          (define-key map (kbd "RET") 'relax-doc)
-                         (define-key map (kbd "C-M-k") 'relax-new-doc)
-                         (define-key map (kbd "C-k") 'relax-kill-doc)
+                         (define-key map (kbd "SPC") 'scroll-down)
+                         (define-key map (kbd "<backspace>") 'scroll-up)
                          ;; TODO:
+                         (define-key map (kbd "C-o") 'relax-new-doc)
+                         (define-key map (kbd "C-k") 'relax-kill-doc)
                          (define-key map "[" 'relax-prev-page)
                          (define-key map "]" 'relax-next-page)
                          (define-key map (kbd "C-M-k") 'relax-kill-db)
@@ -137,6 +155,7 @@
 (defvar relax-doc-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") 'relax-doc-submit)
+    ;; TODO
     (define-key map (kbd "C-c C-k") 'relax-doc-delete-current)
     (define-key map (kbd "C-c C-a") 'relax-upload-attachment)
     map))
