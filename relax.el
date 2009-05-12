@@ -24,11 +24,10 @@
 
 ;; All kinds of things:
 ;; * pretty-printing
-;; * new document
-;; * delete document
 ;; * attachment handling
 ;; * pagination
 ;; * hide _rev and _id fields?
+;; * error handling
 
 ;;; License:
 
@@ -91,8 +90,8 @@
                          (define-key map (kbd "RET") 'relax-doc)
                          (define-key map (kbd "SPC") 'scroll-down)
                          (define-key map (kbd "<backspace>") 'scroll-up)
-                         ;; TODO:
                          (define-key map (kbd "C-o") 'relax-new-doc)
+                         ;; TODO:
                          (define-key map (kbd "C-k") 'relax-kill-doc)
                          (define-key map "[" 'relax-prev-page)
                          (define-key map "]" 'relax-next-page)
@@ -136,14 +135,21 @@
 
 (defun relax-insert-doc-list (docs)
   (dolist (doc docs)
-    (insert "  [" (getf doc :id) "]\n")))
+    (insert "  [" (getf doc :id) " @rev " (getf doc :rev) "]\n")))
+
+(defun relax-new-doc ()
+  (interactive)
+  (let ((url-request-method "POST")
+        (url-request-data "{}"))
+    (url-retrieve (relax-url) 'relax-visit-new-doc)))
+
+(defun relax-visit-new-doc (status)
+  (goto-char (point-min))
+  (search-forward "Location: ")
+  (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
+    (url-retrieve doc-url 'relax-doc-mode (list doc-url))))
 
 ;; TODO:
-;; (defun relax-new-doc ()
-;;   (interactive))
-
-;; (defun relax-kill-doc ()
-;;   (interactive))
 
 ;; (defun relax-kill-db ()
 ;;   (interactive))
@@ -154,9 +160,9 @@
 
 (defvar relax-doc-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'relax-doc-submit)
+    (define-key map (kbd "C-c C-c") 'relax-submit)
     ;; TODO
-    (define-key map (kbd "C-c C-k") 'relax-doc-delete-current)
+    (define-key map (kbd "C-c C-k") 'relax-kill-doc)
     (define-key map (kbd "C-c C-a") 'relax-upload-attachment)
     map))
 
@@ -185,10 +191,17 @@
   (let ((doc-url (concat db-url "/" (word-at-point))))
     (url-retrieve doc-url 'relax-doc-mode (list doc-url))))
 
-(defun relax-doc-submit ()
+(defun relax-submit ()
   (interactive)
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
     (url-retrieve doc-url 'message)))
+
+(defun relax-kill-doc ()
+  (interactive)
+  ;; TODO: allow kill from db buffer
+  (let ((url-request-method "DELETE")
+        (url (concat doc-url "?rev=" (getf doc :_rev))))
+    (url-retrieve url 'message)))
 
 (provide 'relax) ;;; relax.el ends here
