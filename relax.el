@@ -18,12 +18,13 @@
 ;; Needs the json.el package, which comes with Emacs 23, but is also
 ;; available from ELPA or from http://edward.oconnor.cx/elisp/json.el
 
+;; javascript.el is also required.
+
 ;; Right now it just does listing, reading, and updating of documents.
 
 ;;; TODO:
 
 ;; All kinds of things:
-;; * pretty-printing
 ;; * attachment handling
 ;; * pagination
 ;; * hide _rev and _id fields?
@@ -50,6 +51,8 @@
 
 (require 'url)
 (require 'json)
+(require 'javascript)
+(require 'mm-util) ;; for replace-regexp-in-string
 
 (defvar relax-host "127.0.0.1")
 (defvar relax-port 5984)
@@ -152,7 +155,7 @@
   (goto-char (point-min))
   (search-forward "Location: ")
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
-    (url-retrieve doc-url 'relax-doc-mode (list doc-url))))
+    (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-update-db ()
   (interactive)
@@ -172,26 +175,36 @@
 (defvar relax-doc-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-x C-s") 'relax-submit)
-    (define-key map (kbd "C-c C-r") 'relax-update-doc)
+    (define-key map (kbd "C-c C-u") 'relax-update-doc)
     (define-key map (kbd "C-c C-k") 'relax-kill-doc)
     map))
 
-(defun relax-doc-mode (status document-url)
+(defun relax-doc-load (status document-url)
   (let ((json-buffer (current-buffer)))
     (relax-trim-headers)
     (let ((doc-string (buffer-substring-no-properties (point-min) (point-max))))
       (switch-to-buffer (concat "*relax " document-url "*"))
-      (kill-all-local-variables)
+
+      (javascript-mode)
+      (relax-doc-mode t)
+      (set (make-local-variable 'http-buffer) json-buffer)
+      (set (make-local-variable 'kill-buffer-hook) '(relax-kill-http-buffer))
       (set (make-local-variable 'doc-url) document-url)
       (set (make-local-variable 'doc)
            (relax-load-json-buffer json-buffer))
       (insert doc-string)))
-  
-  (use-local-map relax-doc-mode-map)
-  (setq mode-name "relax-doc")
-  (setq major-mode 'relax-doc-mode)
-  
-  (run-hooks 'relax-doc-mode-hook))
+
+  (save-excursion ;; prettify
+    (goto-char (point-min))
+    (replace-string "\",\"" "\",\n\"")
+    (indent-region (point-min) (point-max))
+    (font-lock-fontify-buffer))
+  (message "Loaded %s" doc-url))
+
+(define-minor-mode relax-doc-mode
+  "Minor mode for interacting with CouchDB documents."
+  nil
+  "relax doc")
 
 (defun relax-doc ()
   "Open a buffer viewing the document at point."
@@ -199,18 +212,21 @@
 
   ;; TODO: make sure point is over DB ID.
   (let ((doc-url (concat db-url "/" (word-at-point))))
-    (url-retrieve doc-url 'relax-doc-mode (list doc-url))))
+    (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
   (interactive)
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
-    (url-retrieve doc-url 'message)))
+    (lexical-let ((doc-buffer (current-buffer)))
+      (url-retrieve doc-url (lambda (status)
+                              (switch-to-buffer doc-buffer)
+                              (relax-update-doc))))))
 
 (defun relax-update-doc ()
   (interactive)
   (delete-region (point-min) (point-max))
-  (url-retrieve doc-url 'relax-doc-mode (list doc-url)))
+  (url-retrieve doc-url 'relax-doc-load (list doc-url)))
 
 (defun relax-kill-doc ()
   (interactive)
