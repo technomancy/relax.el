@@ -18,7 +18,9 @@
 ;; Needs the json.el package, which comes with Emacs 23, but is also
 ;; available from ELPA or from http://edward.oconnor.cx/elisp/json.el
 
-;; javascript.el is also required.
+;; javascript.el is also required. Get it from
+;; http://www.brgeight.se/downloads/emacs/javascript.el and replace
+;; (provide 'javascript-mode) with (provide 'javascript)
 
 ;; Right now it just does listing, reading, and updating of documents.
 
@@ -49,6 +51,7 @@
 
 ;;; Code:
 
+(require 'thingatpt)
 (require 'url)
 (require 'json)
 (require 'javascript)
@@ -223,7 +226,7 @@
   (interactive)
 
   ;; TODO: make sure point is over DB ID.
-  (let ((doc-url (concat db-url "/" (word-at-point))))
+  (let ((doc-url (relax-url (word-at-point))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
