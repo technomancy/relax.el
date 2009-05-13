@@ -155,12 +155,12 @@
   (dolist (doc docs)
     (insert (format "  [%s @rev %s]\n" (getf doc :id) (getf (getf doc :value) :rev)))))
 
-(defun relax-new-doc ()
-  (interactive)
-  ;; TODO: allow user to choose ID
-  (let ((url-request-method "POST")
-        (url-request-data "{}"))
-    (url-retrieve (relax-url) 'relax-visit-new-doc)))
+(defun relax-new-doc (choose-id)
+  (interactive "P")
+  (let ((url-request-method (if choose-id "PUT" "POST"))
+        (url-request-data "{}")
+        (id (if choose-id (read-from-minibuffer "Document ID: "))))
+    (url-retrieve (relax-url id) 'relax-visit-new-doc)))
 
 (defun relax-visit-new-doc (status)
   (goto-char (point-min))
