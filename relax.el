@@ -89,6 +89,11 @@
 (defun relax-kill-http-buffer ()
   (kill-buffer http-buffer))
 
+(defun relax-kill-document (doc rev &optional callback)
+  (let ((url-request-method "DELETE")
+        (url (concat (relax-url doc) "?rev=" rev)))
+    (url-retrieve url (or callback 'message))))
+
 ;;; DB-level
 
 (defvar relax-mode-hook nil)
@@ -169,10 +174,11 @@
   (delete-region (point-min) (point-max))
   (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
 
-;; TODO:
-
-;; (defun relax-kill-db ()
-;;   (interactive))
+(defun relax-db-kill-doc ()
+  (interactive)
+  (let ((url-request-method "DELETE")
+        (url (concat doc-url "?rev=" (getf doc :_rev))))
+    (url-retrieve url 'message)))
 
 ;;; Document-level
 
@@ -235,10 +241,12 @@
   (url-retrieve doc-url 'relax-doc-load (list doc-url)))
 
 (defun relax-kill-doc ()
+  "Delete this revision of the current document from the database."
   (interactive)
-  ;; TODO: allow kill from db buffer
-  (let ((url-request-method "DELETE")
-        (url (concat doc-url "?rev=" (getf doc :_rev))))
-    (url-retrieve url 'message)))
+  (lexical-let ((target-buffer (current-buffer)))
+    (relax-kill-document (getf doc :_id) (getf doc :_rev)
+                         (lambda (status)
+                           (kill-buffer target-buffer)
+                           (relax-update-db)))))
 
 (provide 'relax) ;;; relax.el ends here
