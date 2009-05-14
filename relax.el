@@ -22,8 +22,6 @@
 ;; http://www.brgeight.se/downloads/emacs/javascript.el and replace
 ;; (provide 'javascript-mode) with (provide 'javascript)
 
-;; Right now it just does listing, reading, and updating of documents.
-
 ;;; TODO:
 
 ;; All kinds of things:
@@ -96,6 +94,13 @@
   (let ((url-request-method "DELETE")
         (url (concat (relax-url doc) "?rev=" rev)))
     (url-retrieve url (or callback 'message))))
+
+(defun relax-parse-db-line ()
+  "Return the id and rev of the document at point."
+  (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+    (unless (string-match "\\[\\(.*\\) @rev \\(.*\\)\\]" line)
+      (error "Not on a document line"))
+    (list (match-string 1 line) (match-string 2 line))))
 
 ;;; DB-level
 
@@ -171,17 +176,16 @@
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
-(defun relax-update-db ()
+(defun relax-update-db (&optional status)
   (interactive)
   (setq buffer-read-only nil)
   (delete-region (point-min) (point-max))
   (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
 
-(defun relax-db-kill-doc ()
+(defun relax-kill-doc-from-db ()
   (interactive)
-  (let ((url-request-method "DELETE")
-        (url (concat doc-url "?rev=" (getf doc :_rev))))
-    (url-retrieve url 'message)))
+  (apply 'relax-kill-document (append (relax-parse-db-line)
+                                      '(relax-update-db))))
 
 ;;; Document-level
 
@@ -224,9 +228,7 @@
 (defun relax-doc ()
   "Open a buffer viewing the document at point."
   (interactive)
-
-  ;; TODO: make sure point is over DB ID.
-  (let ((doc-url (relax-url (word-at-point))))
+  (let ((doc-url (relax-url (car (relax-parse-db-line)))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
