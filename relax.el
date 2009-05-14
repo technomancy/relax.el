@@ -26,7 +26,6 @@
 
 ;; All kinds of things:
 ;; * attachment handling
-;; * pagination
 ;; * hide _rev and _id fields?
 ;; * error handling
 ;; * fix provide line of javascript.el or switch to espresso.el
@@ -37,12 +36,12 @@
 ;; modify it under the terms of the GNU General Public License
 ;; as published by the Free Software Foundation; either version 3
 ;; of the License, or (at your option) any later version.
-;; 
+;;
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
-;; 
+;;
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs; see the file COPYING.  If not, write to the
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
@@ -59,6 +58,9 @@
 (defvar relax-host "127.0.0.1")
 (defvar relax-port 5984)
 (defvar relax-db-path "")
+
+(defvar relax-docs-per-page 25
+  "How many documents to show on a given page.")
 
 ;;; Utilities
 
@@ -122,8 +124,8 @@
                          (define-key map (kbd "<backspace>") 'scroll-up)
                          (define-key map "q" 'quit-window)
                          (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
-                         ;; (define-key map "[" 'relax-prev-page)
-                         ;; (define-key map "]" 'relax-next-page)
+                         (define-key map "[" 'relax-prev-page)
+                         (define-key map "]" 'relax-next-page)
                          map))
 
 (defun relax-url-completions ()
@@ -145,7 +147,9 @@
           relax-port (url-port url)
           relax-db-path (url-filename url)))
   (if (not (get-buffer (relax-db-buffer-name db-url)))
-      (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url))
+      (url-retrieve (relax-url (format "_all_docs?descending=false&limit=%s"
+                                       relax-docs-per-page))
+                    'relax-mode (list db-url))
     ;; buffer has been initialized; needs refresh
     (switch-to-buffer (relax-db-buffer-name db-url))
       (relax-update-db)))
@@ -168,20 +172,22 @@
   (setq mode-name "relax")
   (setq major-mode 'relax-mode)
 
-  (insert "== " db-url "\n")
-  (insert (format "Total: %s, offset %s\n\n"
-                  (getf doc-list :total_rows)
-                  (getf doc-list :offset)))
-  (relax-insert-doc-list (getf doc-list :rows))
+  (save-excursion
+    (insert "== " db-url "\n")
+    (insert (format "Total documents: %s\n\n"
+                    (getf doc-list :total_rows)))
+    (relax-insert-doc-list (getf doc-list :rows)))
   (setq buffer-read-only t)
 
   (run-hooks 'relax-mode-hook))
 
 (defun relax-insert-doc-list (docs)
-  "Given a list of documents, insert them into the buffer."
-  (dolist (doc docs)
+  "Given a list of documents, insert them into the buffer sorted by key."
+  (dolist (doc (sort* docs (lambda (doc1 doc2)
+                             (string< (getf doc1 :id) (getf doc2 :id)))))
     ;; If this changes, change relax-parse-db-line to match.
-    (insert (format "  [%s @rev %s]\n" (getf doc :id) (getf (getf doc :value) :rev)))))
+    (insert (format "  [%s @rev %s]\n" (getf doc :id)
+                                       (getf (getf doc :value) :rev)))))
 
 (defun relax-new-doc (choose-id)
   "Create a new document. With prefix arg, prompt for a document ID."
@@ -198,12 +204,15 @@
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
-(defun relax-update-db ()
+(defun relax-update-db (&optional docs)
   "Update the DB buffer with the current document list."
   (interactive)
+  ;; TODO: remain on the same page
   (setq buffer-read-only nil)
   (delete-region (point-min) (point-max))
-  (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
+  (url-retrieve (relax-url (or docs (format "_all_docs?descending=false&limit=%s"
+                                            relax-docs-per-page)))
+                'relax-mode (list db-url)))
 
 (defun relax-kill-doc-from-db ()
   "Issue a delete for the document under point."
@@ -215,6 +224,27 @@
       (relax-kill-document id rev (lambda (status)
                                     (switch-to-buffer db-buffer)
                                     (relax-update-db))))))
+
+(defun relax-next-page ()
+  "Go forward a page. Prefix arg goes back n pages. See relax-docs-per-page."
+  (interactive)
+  ;; TODO: display pagination in DB buffer, prevent paging out of range
+  (relax-update-db (format "_all_docs?descending=false&limit=%s&startkey=\"%s\"&skip=1"
+                           relax-docs-per-page
+                           (save-excursion
+                             (goto-char (point-max))
+                             (previous-line)
+                             (car (relax-parse-db-line))))))
+
+(defun relax-prev-page ()
+  "Go back a page. Prefix arg goes back n pages. See relax-docs-per-page."
+  (interactive)
+  (relax-update-db (format "_all_docs?descending=true&limit=%s&startkey=\"%s\"&skip=1"
+                           relax-docs-per-page
+                           (save-excursion
+                             (goto-char (point-min))
+                             (next-line 3)
+                             (car (relax-parse-db-line))))))
 
 ;;; Document-level
 
