@@ -15,19 +15,29 @@
 
 ;; Interact with CouchDB databases from within Emacs, with ease!
 
-;; Needs the json.el package, which comes with Emacs 23, but is also
-;; available from ELPA or from http://edward.oconnor.cx/elisp/json.el
+;; M-x relax to get started. From there hit C-h b.
 
-;; javascript.el is also required. Get it from
-;; http://www.brgeight.se/downloads/emacs/javascript.el and replace
-;; (provide 'javascript-mode) with (provide 'javascript)
+;;; Installation:
+
+;; Use ELPA. (http://tromey.com/elpa/install.html)
+
+;; If installing by hand for some reason, place on your load path and
+;; put this in your init file:
+
+;; (autoload 'relax "relax" "Connect to the CouchDB database at db-url." t)
+
+;; It depends on json.el and javascript.el. These are available
+;; through ELPA or if you need to get them manually download from
+;; http://edward.oconnor.cx/elisp/json.el and
+;; http://www.brgeight.se/downloads/emacs/javascript.el
 
 ;;; TODO:
 
 ;; All kinds of things:
-;; * attachment handling
-;; * hide _rev and _id fields?
-;; * error handling
+;; * enforce pagination range
+;; * display current page
+;; * better error reporting
+;; * attachment handling?
 ;; * fix provide line of javascript.el or switch to espresso.el
 
 ;;; License:
@@ -52,7 +62,7 @@
 (require 'thingatpt)
 (require 'url)
 (require 'json)
-(require 'javascript)
+(load "javascript.el") ;; bug in this package means we can't require it
 (require 'mm-util) ;; for replace-regexp-in-string
 
 (defvar relax-host "127.0.0.1")
@@ -120,8 +130,8 @@
                          (define-key map (kbd "C-o") 'relax-new-doc)
                          (define-key map (kbd "g") 'relax-update-db)
 
-                         (define-key map (kbd "SPC") 'scroll-down)
-                         (define-key map (kbd "<backspace>") 'scroll-up)
+                         (define-key map (kbd "SPC") 'scroll-up)
+                         (define-key map (kbd "<backspace>") 'scroll-down)
                          (define-key map "q" 'quit-window)
                          (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
                          (define-key map "[" 'relax-prev-page)
@@ -138,6 +148,7 @@
             (relax-trim-headers)
             (relax-json-decode (buffer-substring (point-min) (point-max))))))
 
+;;;###autoload
 (defun relax (db-url)
   "Connect to the CouchDB database at db-url."
   (interactive (list (completing-read "CouchDB URL: " (relax-url-completions)
