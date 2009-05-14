@@ -114,16 +114,24 @@
                          (define-key map (kbd "SPC") 'scroll-down)
                          (define-key map (kbd "<backspace>") 'scroll-up)
                          (define-key map "q" 'quit-window)
-                         ;; TODO:
-                         (define-key map (kbd "C-k") 'relax-kill-doc)
-                         (define-key map "[" 'relax-prev-page)
-                         (define-key map "]" 'relax-next-page)
-                         (define-key map (kbd "C-M-k") 'relax-kill-db)
+                         (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
+                         ;; (define-key map "[" 'relax-prev-page)
+                         ;; (define-key map "]" 'relax-next-page)
                          map))
+
+(defun relax-url-completions ()
+  (mapcar (lambda (db-name) (let ((relax-db-path ""))
+                         (relax-url db-name)))
+          (with-current-buffer (url-retrieve-synchronously
+                                (let ((relax-db-path ""))
+                                  (relax-url "_all_dbs")))
+            (relax-trim-headers)
+            (relax-json-decode (buffer-substring (point-min) (point-max))))))
 
 (defun relax (db-url)
   "Connect to the CouchDB database at db-url."
-  (interactive (list (read-from-minibuffer "CouchDB URL: " (relax-url))))
+  (interactive (list (completing-read "CouchDB URL: " (relax-url-completions)
+                                      nil nil (relax-url))))
   (let ((url (url-generic-parse-url db-url)))
     (setq relax-host (url-host url)
           relax-port (url-port url)
