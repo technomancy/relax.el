@@ -106,6 +106,9 @@
       (error "Not on a document line"))
     (list (match-string 1 line) (match-string 2 line))))
 
+(defun relax-db-buffer-name (url)
+  (concat "*relax " url "*"))
+
 ;;; DB-level
 
 (defvar relax-mode-hook nil)
@@ -141,15 +144,17 @@
     (setq relax-host (url-host url)
           relax-port (url-port url)
           relax-db-path (url-filename url)))
-  (if (boundp 'doc-list) ;; buffer has been initialized; needs refresh
-        (relax-update-db)
-      (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url))))
+  (if (not (get-buffer (relax-db-buffer-name db-url)))
+      (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url))
+    ;; buffer has been initialized; needs refresh
+    (switch-to-buffer (relax-db-buffer-name db-url))
+      (relax-update-db)))
 
 (defun relax-mode (status database-url)
   "Major mode for interacting with CouchDB databases."
   (let ((json-buffer (current-buffer)))
     (relax-trim-headers)
-    (switch-to-buffer (concat "*relax " database-url "*"))
+    (switch-to-buffer (relax-db-buffer-name database-url))
     (buffer-disable-undo)
     (kill-all-local-variables)
 
@@ -203,8 +208,13 @@
 (defun relax-kill-doc-from-db ()
   "Issue a delete for the document under point."
   (interactive)
-  (apply 'relax-kill-document (append (relax-parse-db-line)
-                                      '(relax-update-db))))
+  (let* ((line (relax-parse-db-line))
+         (id (car line))
+         (rev (cadr line)))
+    (lexical-let ((db-buffer (current-buffer)))
+      (relax-kill-document id rev (lambda (status)
+                                    (switch-to-buffer db-buffer)
+                                    (relax-update-db))))))
 
 ;;; Document-level
 
