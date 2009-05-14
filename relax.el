@@ -7,7 +7,7 @@
 ;; Version: 0.1
 ;; Keywords: database http
 ;; Created: 2009-05-11
-;; Package-Requires: ((json "1.2"))
+;; Package-Requires: ((json "1.2") (javascript "1.99.8"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -29,6 +29,7 @@
 ;; * pagination
 ;; * hide _rev and _id fields?
 ;; * error handling
+;; * fix provide line of javascript.el or switch to espresso.el
 
 ;;; License:
 
@@ -62,12 +63,15 @@
 ;;; Utilities
 
 (defun relax-url (&optional id)
+  "Return a URL for the given id using relax- host, port, and db-path."
+  ;; remove double slashes that sneak in
   (replace-regexp-in-string "\\([^:]\\)//*" "\\1/"
                             (format "http://%s:%s/%s/%s"
                                     relax-host (number-to-string relax-port)
                                     relax-db-path (or id ""))))
 
 (defun relax-trim-headers ()
+  "Remove HTTP headers from the current buffer."
   (goto-char (point-min))
   (search-forward "\n\n")
   (delete-region (point-min) (point)))
@@ -120,6 +124,7 @@
                          map))
 
 (defun relax-url-completions ()
+  "A list of all DB URLs at the server given by relax-host:relax-port."
   (mapcar (lambda (db-name) (let ((relax-db-path ""))
                          (relax-url db-name)))
           (with-current-buffer (url-retrieve-synchronously
@@ -168,10 +173,13 @@
   (run-hooks 'relax-mode-hook))
 
 (defun relax-insert-doc-list (docs)
+  "Given a list of documents, insert them into the buffer."
   (dolist (doc docs)
+    ;; If this changes, change relax-parse-db-line to match.
     (insert (format "  [%s @rev %s]\n" (getf doc :id) (getf (getf doc :value) :rev)))))
 
 (defun relax-new-doc (choose-id)
+  "Create a new document. With prefix arg, prompt for a document ID."
   (interactive "P")
   (let ((url-request-method (if choose-id "PUT" "POST"))
         (url-request-data "{}")
@@ -179,18 +187,21 @@
     (url-retrieve (relax-url id) 'relax-visit-new-doc)))
 
 (defun relax-visit-new-doc (status)
+  "Open a buffer for a newly-created document. Used as a callback."
   (goto-char (point-min))
   (search-forward "Location: ")
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-update-db (&optional status)
+  "Update the DB buffer with the current document list."
   (interactive)
   (setq buffer-read-only nil)
   (delete-region (point-min) (point-max))
   (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
 
 (defun relax-kill-doc-from-db ()
+  "Issue a delete for the document under point."
   (interactive)
   (apply 'relax-kill-document (append (relax-parse-db-line)
                                       '(relax-update-db))))
@@ -207,6 +218,7 @@
     map))
 
 (defun relax-doc-load (status document-url)
+  "Create and switch to a buffer for a newly-retrieved document."
   (let ((json-buffer (current-buffer)))
     (relax-trim-headers)
     (let ((doc-string (buffer-substring-no-properties (point-min) (point-max))))
@@ -240,6 +252,7 @@
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
+  "Save the current status of the buffer to the server."
   (interactive)
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
@@ -249,12 +262,13 @@
                               (relax-update-doc))))))
 
 (defun relax-update-doc ()
+  "Update the current buffer with the latest version of the document."
   (interactive)
   (delete-region (point-min) (point-max))
   (url-retrieve doc-url 'relax-doc-load (list doc-url)))
 
 (defun relax-kill-doc ()
-  "Delete this revision of the current document from the database."
+  "Delete this revision of the current document from the server."
   (interactive)
   (lexical-let ((target-buffer (current-buffer)))
     (relax-kill-document (getf doc :_id) (getf doc :_rev)
