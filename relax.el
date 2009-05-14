@@ -141,9 +141,9 @@
     (setq relax-host (url-host url)
           relax-port (url-port url)
           relax-db-path (url-filename url)))
-
-  ;; TODO: update existing DB buffer if present
-  (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url)))
+  (if (boundp 'doc-list) ;; buffer has been initialized; needs refresh
+        (relax-update-db)
+      (url-retrieve (relax-url "_all_docs") 'relax-mode (list db-url))))
 
 (defun relax-mode (status database-url)
   "Major mode for interacting with CouchDB databases."
@@ -193,7 +193,7 @@
   (let ((doc-url (buffer-substring (point) (progn (end-of-line) (point)))))
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
-(defun relax-update-db (&optional status)
+(defun relax-update-db ()
   "Update the DB buffer with the current document list."
   (interactive)
   (setq buffer-read-only nil)
