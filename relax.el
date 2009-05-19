@@ -4,7 +4,7 @@
 ;;
 ;; Author: Phil Hagelberg
 ;; URL: http://github.com/technomancy/relax.el
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: database http
 ;; Created: 2009-05-11
 ;; Package-Requires: ((json "1.2") (javascript "1.99.8"))
@@ -31,9 +31,10 @@
 ;; http://edward.oconnor.cx/elisp/json.el and
 ;; http://www.brgeight.se/downloads/emacs/javascript.el
 
+;; Tested with CouchDB 0.9.
+
 ;;; TODO:
 
-;; All kinds of things:
 ;; * enforce pagination range
 ;; * display current page
 ;; * better error reporting
@@ -65,7 +66,7 @@
 (load "javascript.el") ;; bug in this package means we can't require it
 (require 'mm-util) ;; for replace-regexp-in-string
 
-(defvar relax-host "127.0.0.1")
+(defvar relax-host "127.0.0.1") ;; Can't use localhost due to IPv6 sometimes
 (defvar relax-port 5984)
 (defvar relax-db-path "")
 
@@ -303,8 +304,10 @@
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
-  "Save the current status of the buffer to the server."
+  "Save the contents of the buffer to the server. Enforces valid JSON."
   (interactive)
+  ;; Verify valid JSON before submitting.
+  (relax-json-decode (buffer-substring (point-min) (point-max)))
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
     (lexical-let ((doc-buffer (current-buffer)))
