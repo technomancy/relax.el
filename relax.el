@@ -26,10 +26,10 @@
 
 ;; (autoload 'relax "relax" "Connect to the CouchDB database at db-url." t)
 
-;; It depends on json.el and javascript.el. These are available
+;; It depends on json.el and js.el. These are available
 ;; through ELPA or if you need to get them manually download from
 ;; http://edward.oconnor.cx/elisp/json.el and
-;; http://www.brgeight.se/downloads/emacs/javascript.el
+;; http://download.savannah.gnu.org/releases-noredirect/espresso/espresso.el
 
 ;; Tested with CouchDB 0.9.
 
@@ -39,7 +39,6 @@
 ;; * display current page
 ;; * better error reporting
 ;; * attachment handling?
-;; * fix provide line of javascript.el or switch to espresso.el
 
 ;;; License:
 
@@ -63,7 +62,7 @@
 (require 'thingatpt)
 (require 'url)
 (require 'json)
-(load "javascript.el") ;; bug in this package means we can't require it
+(require 'js)
 (require 'mm-util) ;; for replace-regexp-in-string
 
 (defvar relax-host "127.0.0.1") ;; Can't use localhost due to IPv6 sometimes
@@ -326,7 +325,7 @@
     (let ((doc-string (buffer-substring-no-properties (point-min) (point-max))))
       (switch-to-buffer (concat "*relax " document-url "*"))
 
-      (javascript-mode)
+      (js-mode)
       (relax-doc-mode t)
       (set (make-local-variable 'http-buffer) json-buffer)
       (set (make-local-variable 'kill-buffer-hook) '(relax-kill-http-buffer))
