@@ -126,6 +126,26 @@
 
 (defvar relax-mode-hook nil)
 
+(defun relax-create-db-menu (&rest ignore)
+  (let ((menu (make-sparse-keymap "Databases")))
+    (dolist (db (relax-url-completions))
+      (define-key-after menu (vector (intern (concat "relax-db-" db))) (cons db `(lambda () (interactive) 
+										   (relax ,db)))))
+    menu))
+
+(defvar relax-menu-bar 
+  (let ((menu (make-sparse-keymap "Relax")))
+    (define-key-after menu [relax-doc] '("Open doc" . relax-doc))
+    (define-key-after menu [relax-new-doc] '("New doc" . relax-new-doc))
+    (define-key-after menu [relax-kill-doc] '("Remove doc" . relax-kill-doc-from-db))
+    (define-key-after menu [relax-sp1] '("---"))
+    (define-key-after menu [relax-refresh] '("Update doclist" . relax-update-db))
+    (define-key-after menu [relax-sp2] '("---"))
+    (define-key-after menu [relax-prompt-db] '("Open database..." . relax))
+    (define-key-after menu [relax-databases] '(menu-item "Switch to database" t
+							 :filter relax-create-db-menu))
+    menu))
+
 (defvar relax-mode-map (let ((map (make-sparse-keymap)))
                          (define-key map (kbd "RET") 'relax-doc)
                          (define-key map (kbd "C-o") 'relax-new-doc)
@@ -137,6 +157,10 @@
                          (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
                          (define-key map "[" 'relax-prev-page)
                          (define-key map "]" 'relax-next-page)
+
+			 (define-key map [menu-bar] (make-sparse-keymap))
+			 (define-key map [menu-bar relax] (cons "Relax" relax-menu-bar))
+			 
                          map))
 
 (defun relax-url-completions ()
@@ -164,7 +188,7 @@
                     'relax-mode (list db-url))
     ;; buffer has been initialized; needs refresh
     (switch-to-buffer (relax-db-buffer-name db-url))
-      (relax-update-db)))
+    (relax-update-db)))
 
 (defun relax-mode (status database-url)
   "Major mode for interacting with CouchDB databases."
