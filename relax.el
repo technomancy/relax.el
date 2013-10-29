@@ -4,10 +4,10 @@
 ;;
 ;; Author: Phil Hagelberg
 ;; URL: http://github.com/technomancy/relax.el
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: database http
 ;; Created: 2009-05-11
-;; Package-Requires: ((json "1.2") (javascript "1.99.8"))
+;; Package-Requires: ((json "1.2"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -26,19 +26,19 @@
 
 ;; (autoload 'relax "relax" "Connect to the CouchDB database at db-url." t)
 
-;; It depends on json.el and javascript.el. These are available
+;; It depends on json.el and js.el. These are available
 ;; through ELPA or if you need to get them manually download from
 ;; http://edward.oconnor.cx/elisp/json.el and
-;; http://www.brgeight.se/downloads/emacs/javascript.el
+;; http://download.savannah.gnu.org/releases-noredirect/espresso/espresso.el
+
+;; Tested with CouchDB 0.9.
 
 ;;; TODO:
 
-;; All kinds of things:
 ;; * enforce pagination range
 ;; * display current page
 ;; * better error reporting
 ;; * attachment handling?
-;; * fix provide line of javascript.el or switch to espresso.el
 
 ;;; License:
 
@@ -62,10 +62,11 @@
 (require 'thingatpt)
 (require 'url)
 (require 'json)
-(load "javascript.el") ;; bug in this package means we can't require it
+(require 'js)
 (require 'mm-util) ;; for replace-regexp-in-string
+(require 'cl)
 
-(defvar relax-host "127.0.0.1")
+(defvar relax-host "127.0.0.1") ;; Can't use localhost due to IPv6 sometimes
 (defvar relax-port 5984)
 (defvar relax-db-path "")
 
@@ -75,7 +76,7 @@
 ;;; Utilities
 
 (defun relax-url (&optional id)
-  "Return a URL for the given id using relax- host, port, and db-path."
+  "Return a URL for the given ID using relax- host, port, and db-path."
   ;; remove double slashes that sneak in
   (replace-regexp-in-string "\\([^:]\\)//*" "\\1/"
                             (format "http://%s:%s/%s/%s"
@@ -125,18 +126,45 @@
 
 (defvar relax-mode-hook nil)
 
-(defvar relax-mode-map (let ((map (make-sparse-keymap)))
-                         (define-key map (kbd "RET") 'relax-doc)
-                         (define-key map (kbd "C-o") 'relax-new-doc)
-                         (define-key map (kbd "g") 'relax-update-db)
+(defun relax-create-db-menu (&rest ignore)
+  (let ((menu (make-sparse-keymap "Databases")))
+    (dolist (db (relax-url-completions))
+      (define-key-after menu (vector (intern (concat "relax-db-" db))) (cons db `(lambda () (interactive)
+                                                                                   (relax ,db)))))
+    menu))
 
-                         (define-key map (kbd "SPC") 'scroll-up)
-                         (define-key map (kbd "<backspace>") 'scroll-down)
-                         (define-key map "q" 'quit-window)
-                         (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
-                         (define-key map "[" 'relax-prev-page)
-                         (define-key map "]" 'relax-next-page)
-                         map))
+(defvar relax-menu-bar
+  (let ((menu (make-sparse-keymap "Relax")))
+    (define-key-after menu [relax-doc] '("Open doc" . relax-doc))
+    (define-key-after menu [relax-new-doc] '("New doc" . relax-new-doc))
+    (define-key-after menu [relax-kill-doc] '("Remove doc" . relax-kill-doc-from-db))
+    (define-key-after menu [relax-sp1] '("---"))
+    (define-key-after menu [relax-refresh] '("Update doclist" . relax-update-db))
+    (define-key-after menu [relax-sp2] '("---"))
+    (define-key-after menu [relax-prompt-db] '("Open database..." . relax))
+    (define-key-after menu [relax-new-db] '("Open new database..." . relax-new-db))
+    (define-key-after menu [relax-databases] '(menu-item "Switch to database" t
+                                                         :filter relax-create-db-menu))
+    (define-key-after menu [relax-delete-db] '("Delete database..." . relax-delete-db))
+    menu))
+
+(defvar relax-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") 'relax-doc)
+    (define-key map (kbd "C-o") 'relax-new-doc)
+    (define-key map (kbd "g") 'relax-update-db)
+
+    (define-key map (kbd "SPC") 'scroll-up)
+    (define-key map (kbd "<backspace>") 'scroll-down)
+    (define-key map "q" 'quit-window)
+    (define-key map (kbd "C-k") 'relax-kill-doc-from-db)
+    (define-key map "[" 'relax-prev-page)
+    (define-key map "]" 'relax-next-page)
+
+    (define-key map [menu-bar] (make-sparse-keymap))
+    (define-key map [menu-bar relax] (cons "Relax" relax-menu-bar))
+
+    map))
 
 (defun relax-url-completions ()
   "A list of all DB URLs at the server given by relax-host:relax-port."
@@ -150,7 +178,7 @@
 
 ;;;###autoload
 (defun relax (db-url)
-  "Connect to the CouchDB database at db-url."
+  "Connect to the CouchDB database at DB-URL."
   (interactive (list (completing-read "CouchDB URL: " (relax-url-completions)
                                       nil nil (relax-url))))
   (let ((url (url-generic-parse-url db-url)))
@@ -163,7 +191,7 @@
                     'relax-mode (list db-url))
     ;; buffer has been initialized; needs refresh
     (switch-to-buffer (relax-db-buffer-name db-url))
-      (relax-update-db)))
+    (relax-update-db)))
 
 (defun relax-mode (status database-url)
   "Major mode for interacting with CouchDB databases."
@@ -200,10 +228,36 @@
     (insert (format "  [%s @rev %s]\n" (getf doc :id)
                                        (getf (getf doc :value) :rev)))))
 
+(defun relax-new-db (url)
+  "Create a new database at URL."
+  (interactive (list (completing-read "CouchDB URL: " (relax-url-completions)
+                                      nil nil (relax-url))))
+  (when url
+    (message url)
+    (let ((url-request-method "PUT"))
+      (url-retrieve url (lambda (status url)
+                          (if status
+                              (message (format "%S" status))
+                            (relax url))) (list url)))))
+
+(defun relax-delete-db (url)
+  "Delete database at URL."
+  (interactive (list (completing-read "CouchDB URL: " (relax-url-completions)
+                                      nil nil (relax-url))))
+  (when url
+    (message url)
+    (let ((url-request-method "DELETE"))
+      (url-retrieve url (lambda (status url)
+                          (if status
+                              (message (format "%S" status))
+                            (message "Ok"))) (list url)))))
+
 (defun relax-new-doc (choose-id)
-  "Create a new document. With prefix arg, prompt for a document ID."
+  "Create a new document. With prefix arg CHOOSE-ID, prompt for a document ID."
   (interactive "P")
   (let ((url-request-method (if choose-id "PUT" "POST"))
+        (url-request-extra-headers
+         `(("content-type" . "application/json")))
         (url-request-data "{}")
         (id (if choose-id (read-from-minibuffer "Document ID: "))))
     (url-retrieve (relax-url id) 'relax-visit-new-doc)))
@@ -216,7 +270,7 @@
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-update-db (&optional docs)
-  "Update the DB buffer with the current document list."
+  "Update the DB buffer with the current list of DOCS."
   (interactive)
   ;; TODO: remain on the same page
   (setq buffer-read-only nil)
@@ -237,24 +291,24 @@
                                     (relax-update-db))))))
 
 (defun relax-next-page ()
-  "Go forward a page. Prefix arg goes back n pages. See relax-docs-per-page."
+  "Go forward a page.  With prefix arg, go back n pages.  See `relax-docs-per-page'."
   (interactive)
   ;; TODO: display pagination in DB buffer, prevent paging out of range
   (relax-update-db (format "_all_docs?descending=false&limit=%s&startkey=\"%s\"&skip=1"
                            relax-docs-per-page
                            (save-excursion
                              (goto-char (point-max))
-                             (previous-line)
+                             (forward-line -1)
                              (car (relax-parse-db-line))))))
 
 (defun relax-prev-page ()
-  "Go back a page. Prefix arg goes back n pages. See relax-docs-per-page."
+  "Go back a page.  With prefix arg, go back n pages.  See `relax-docs-per-page'."
   (interactive)
   (relax-update-db (format "_all_docs?descending=true&limit=%s&startkey=\"%s\"&skip=1"
                            relax-docs-per-page
                            (save-excursion
                              (goto-char (point-min))
-                             (next-line 3)
+                             (forward-line 3)
                              (car (relax-parse-db-line))))))
 
 ;;; Document-level
@@ -275,7 +329,7 @@
     (let ((doc-string (buffer-substring-no-properties (point-min) (point-max))))
       (switch-to-buffer (concat "*relax " document-url "*"))
 
-      (javascript-mode)
+      (js-mode)
       (relax-doc-mode t)
       (set (make-local-variable 'http-buffer) json-buffer)
       (set (make-local-variable 'kill-buffer-hook) '(relax-kill-http-buffer))
@@ -294,7 +348,7 @@
 (define-minor-mode relax-doc-mode
   "Minor mode for interacting with CouchDB documents."
   nil
-  "relax doc")
+  " relax-doc")
 
 (defun relax-doc ()
   "Open a buffer viewing the document at point."
@@ -303,8 +357,10 @@
     (url-retrieve doc-url 'relax-doc-load (list doc-url))))
 
 (defun relax-submit ()
-  "Save the current status of the buffer to the server."
+  "Save the contents of the buffer to the server.  Enforces valid JSON."
   (interactive)
+  ;; Verify valid JSON before submitting.
+  (relax-json-decode (buffer-substring (point-min) (point-max)))
   (let ((url-request-method "PUT")
         (url-request-data (buffer-substring (point-max) (point-min))))
     (lexical-let ((doc-buffer (current-buffer)))
@@ -327,4 +383,9 @@
                            (kill-buffer target-buffer)
                            (relax-update-db)))))
 
-(provide 'relax) ;;; relax.el ends here
+;; Local Variables:
+;; indent-tabs-mode: nil
+;; End:
+
+(provide 'relax)
+;;; relax.el ends here
