@@ -7,7 +7,7 @@
 ;; Version: 0.2
 ;; Keywords: database http
 ;; Created: 2009-05-11
-;; Package-Requires: ((json "1.2") (javascript "1.99.8"))
+;; Package-Requires: ((json "1.2"))
 
 ;; This file is not part of GNU Emacs.
 
