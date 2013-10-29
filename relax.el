@@ -128,11 +128,11 @@
 (defun relax-create-db-menu (&rest ignore)
   (let ((menu (make-sparse-keymap "Databases")))
     (dolist (db (relax-url-completions))
-      (define-key-after menu (vector (intern (concat "relax-db-" db))) (cons db `(lambda () (interactive) 
+      (define-key-after menu (vector (intern (concat "relax-db-" db))) (cons db `(lambda () (interactive)
                                                                                    (relax ,db)))))
     menu))
 
-(defvar relax-menu-bar 
+(defvar relax-menu-bar
   (let ((menu (make-sparse-keymap "Relax")))
     (define-key-after menu [relax-doc] '("Open doc" . relax-doc))
     (define-key-after menu [relax-new-doc] '("New doc" . relax-new-doc))
@@ -161,7 +161,7 @@
 
                          (define-key map [menu-bar] (make-sparse-keymap))
                          (define-key map [menu-bar relax] (cons "Relax" relax-menu-bar))
-                         
+
                          map))
 
 (defun relax-url-completions ()
