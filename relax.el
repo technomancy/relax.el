@@ -254,6 +254,8 @@
   "Create a new document. With prefix arg, prompt for a document ID."
   (interactive "P")
   (let ((url-request-method (if choose-id "PUT" "POST"))
+        (url-request-extra-headers
+         `(("content-type" . "application/json")))
         (url-request-data "{}")
         (id (if choose-id (read-from-minibuffer "Document ID: "))))
     (url-retrieve (relax-url id) 'relax-visit-new-doc)))
